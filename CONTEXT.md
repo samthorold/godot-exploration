@@ -22,7 +22,7 @@ Autonomous change in the world over time, driven by cellular-automata-style rule
 
 The two-cadence machinery (state retention for unloaded chunks, presence_history recording, replay-on-reload) is not yet implemented; today's prototype keeps all relevant chunks loaded for the duration of a session, so the question doesn't arise.
 
-The function is pure modulo `presence_history`, which records where the player has been so [[presence-influence]] can be replayed for unloaded chunks.
+The function is pure modulo `presence_history`, which records where the player has been so [[presence-coupling]] can be replayed for unloaded chunks.
 
 ### Traversal cost
 Terrain is not binary passable/blocked. Tiles carry a movement cost on a spectrum: open floor ≪ loose rubble ≪ packed earth ≪ cracked wall ≪ solid wall (impassable). Cost varies with the underlying terrain state and (eventually) with field values like [[vitality]].
@@ -40,6 +40,8 @@ A scalar measure of "how alive" a tile is. Driven by *coupled growth-and-decay r
 ### Dynamics stability
 The design constraint that the vitality field must land between two failure modes: *mush* (diffusion dominates, all character smooths into uniform value) and *butterfly* (sensitivity dominates, a single perturbation cascades across the world). The eventual growth/decay rules and the distributed perturbations from [[agents]] are what hold the middle; without either, the field tends toward mush. Finding the middle is a feel question, not an analytic one — the prototype is the means.
 
+Today's prototype is deliberately positioned at the mush end: only diffusion runs, no growth/decay, no agents. This is *not* a bug to work around — it is the trajectory we want to observe firsthand before designing the counterweights, because the eventual rules will be designed against intuitions earned by feeling mush actually happen. Do not add a placeholder counterweight to "fix" the prototype's homogenisation; that decision was made deliberately.
+
 ### Local mixing
 A pass within [[evolution]], not a parallel mechanism. The single local rule by which two cells of a field exchange value: symmetric, conservative, diffusion-shaped, *mass-weighted by [[field-capacity]]*. Runs inside `evolve` over an adjacency graph that includes both tile↔tile edges and [[mobile-field-cell]]↔underfoot tile edges — the player is just a (high-capacity) node in that graph. There is no separate "coupling" rule; coupling is the same pass applied to the same graph. The conserved quantity across any coupled pair is `m·v`, not `v` alone — bigger reservoirs barely move per exchange, smaller ones equilibrate fast.
 
@@ -54,6 +56,8 @@ The strong, single-tile presence edge: ([[mobile-field-cell]], underfoot tile) i
 
 ### Gaze presence
 The weak, distributed presence edges: every tile in the [[mobile-field-cell]]'s field of view is connected to the cell by an additional edge in the [[local-mixing]] graph, at lower coupling strength than the footprint edge (smaller effective κ, larger capacity-asymmetry, or both). Observation thus changes the observed — and the observed shapes the observer back — by the same operator, slowly. No new mechanism, no new pass: just additional edges of the existing graph. The same field-of-view computation that drives perception ([[memory]] / [[truth]]) drives coupling — visibility *is* a form of presence.
+
+Not yet implemented; today's prototype builds only [[presence-coupling]] (the foot). Gaze presence is designed and waiting — it will slot in as additional edges in the existing diffusion pass, with no other code changes.
 
 ### Mobile field-cell
 A field-stack with a position that moves through the world. The [[player-field-stack]] is the first instance; future [[agents]] will be others. A mobile cell couples to whichever tile it currently occupies via [[local-mixing]] — the same operator that mixes tile↔tile — so the player is never a special case in the field code. Mobile cells have [[field-capacity]] > 1 (tiles default to 1), which is how their stabilising/perturbing effect on the field is encoded structurally rather than via special-case behaviour.
