@@ -7,6 +7,8 @@ var readout: Label = null
 
 var tick_rate: float = 4.0
 var tick_accum: float = 0.0
+var footstep_moss_chance: float = 0.15
+var _last_player_tile: Vector2i = Vector2i(0x7FFFFFFF, 0x7FFFFFFF)
 
 func _ready() -> void:
 	randomize()
@@ -64,6 +66,13 @@ func _process(delta: float) -> void:
 		return
 
 	cm.ensure_loaded(player.position)
+
+	var current_tile: Vector2i = player.tile_position()
+	if current_tile != _last_player_tile:
+		if _last_player_tile.x != 0x7FFFFFFF and cm.tile_at(_last_player_tile.x, _last_player_tile.y) == WorldGen.FLOOR:
+			if randf() < footstep_moss_chance:
+				cm.set_tile_at(_last_player_tile.x, _last_player_tile.y, WorldGen.MOSS)
+		_last_player_tile = current_tile
 
 	if not cm.paused:
 		tick_accum += delta

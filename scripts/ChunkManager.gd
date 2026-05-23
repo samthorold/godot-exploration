@@ -53,6 +53,16 @@ func world_tick(player_tile: Vector2i) -> void:
 		_redraw_tint(key)
 	tick_count += 1
 
+func set_tile_at(wx: int, wy: int, tile_type: int) -> void:
+	var cs := WorldGen.CHUNK_SIZE
+	var cx := floori(float(wx) / float(cs))
+	var cy := floori(float(wy) / float(cs))
+	var key := Vector2i(cx, cy)
+	if key not in _chunks:
+		return
+	_chunks[key].tiles[wy - cy * cs][wx - cx * cs] = tile_type
+	_redraw_tint(key)
+
 func tile_at(wx: int, wy: int) -> int:
 	var cs := WorldGen.CHUNK_SIZE
 	var cx := floori(float(wx) / float(cs))
