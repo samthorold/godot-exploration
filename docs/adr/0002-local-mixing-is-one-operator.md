@@ -1,5 +1,8 @@
 # Local mixing is one pass inside `evolve`
 
+> **Superseded by [ADR-0004](0004-world-is-a-graph-of-typed-agents.md).** Mass-weighted diffusion was found to be defined-to-mush on a closed graph; the substrate is now a graph of typed agents updated by synchronous tick. The text below is preserved for history.
+
+
 The vitality field — and any field added later — evolves via a single local mixing pass inside the world's one update function, `evolve(state, Δt, presence_history) → state'`. The pass runs over an adjacency graph that includes both tile↔tile edges and mobile-cell↔underfoot-tile edges; the player (and future agents) are nodes in the same graph. There is no separate "coupling" mechanism, no separate "coupling tick," and no call site outside `evolve`. Coupling is the same pass applied to the same graph.
 
 ## Why

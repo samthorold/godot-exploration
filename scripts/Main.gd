@@ -5,6 +5,9 @@ var player: Node2D = null
 var hud: CanvasLayer = null
 var readout: Label = null
 
+var tick_rate: float = 4.0
+var tick_accum: float = 0.0
+
 func _ready() -> void:
 	randomize()
 	_start(randi())
@@ -14,25 +17,22 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	match event.keycode:
 		KEY_R:
-			# Restart with a fresh seed.
 			for child in get_children():
 				child.queue_free()
 			_start(randi())
 		KEY_F:
 			if cm != null:
-				cm.frozen = not cm.frozen
+				cm.paused = not cm.paused
 		KEY_BRACKETLEFT:
-			if cm != null:
-				cm.kappa = max(0.0, cm.kappa - 0.05)
+			tick_rate = max(1.0, tick_rate - 1.0)
 		KEY_BRACKETRIGHT:
-			if cm != null:
-				cm.kappa += 0.05
+			tick_rate += 1.0
 		KEY_MINUS:
-			if player != null:
-				player.capacity = max(1.0, player.capacity - 1.0)
+			if cm != null:
+				cm.moss_probability = max(0.05, cm.moss_probability - 0.05)
 		KEY_EQUAL:
-			if player != null:
-				player.capacity += 1.0
+			if cm != null:
+				cm.moss_probability = min(0.95, cm.moss_probability + 0.05)
 
 func _start(seed_val: int) -> void:
 	cm = ChunkManager.new()
@@ -40,23 +40,14 @@ func _start(seed_val: int) -> void:
 	cm.setup(seed_val)
 	add_child(cm)
 
-	# Load the chunks around the origin so we can find a spawn tile.
-	# Use ensure_loaded (not refresh) — we don't want to reveal tiles around
-	# the origin, only to be able to read them.
 	cm.ensure_loaded(Vector2.ZERO)
-
-	var spawn := _find_spawn(cm)
 
 	player = Node2D.new()
 	player.name = "Player"
 	player.set_script(preload("res://scripts/Player.gd"))
-	player.chunk_manager = cm
 	add_child(player)
+	player.position = Vector2.ZERO
 
-	var ts := float(WorldGen.TILE_SIZE)
-	player.position = Vector2(spawn.x * ts + ts * 0.5, spawn.y * ts + ts * 0.5)
-
-	# Debug HUD — disposable. Drops out when tuning settles.
 	hud = CanvasLayer.new()
 	readout = Label.new()
 	readout.position = Vector2(10, 10)
@@ -66,23 +57,29 @@ func _start(seed_val: int) -> void:
 	hud.add_child(readout)
 	add_child(hud)
 
-func _process(_delta: float) -> void:
+	tick_accum = 0.0
+
+func _process(delta: float) -> void:
 	if cm == null or player == null or readout == null:
 		return
-	var ts := WorldGen.TILE_SIZE
-	var tx := floori(player.position.x / float(ts))
-	var ty := floori(player.position.y / float(ts))
-	var v_tile := cm.vitality_at(tx, ty)
-	var d_tile := cm.density_at_tile(tx, ty)
-	var frozen_tag := "  (FROZEN)" if cm.frozen else ""
-	readout.text = "player  v %.3f  m %.1f\ntile    v %.3f  d %.3f\nkappa %.2f%s\n[/] kappa   -/= capacity   F freeze   R restart" % [
-		player.vitality, player.capacity, v_tile, d_tile, cm.kappa, frozen_tag
-	]
 
-func _find_spawn(cm_: ChunkManager) -> Vector2i:
-	# Scan tiles near the origin for the first open floor cell.
-	for y in range(-WorldGen.CHUNK_SIZE, WorldGen.CHUNK_SIZE * 2):
-		for x in range(-WorldGen.CHUNK_SIZE, WorldGen.CHUNK_SIZE * 2):
-			if not cm_.is_wall(x, y):
-				return Vector2i(x, y)
-	return Vector2i(0, 0)
+	cm.ensure_loaded(player.position)
+
+	if not cm.paused:
+		tick_accum += delta
+		var tick_interval := 1.0 / tick_rate
+		while tick_accum >= tick_interval:
+			tick_accum -= tick_interval
+			cm.world_tick(player.tile_position() as Vector2i)
+
+	var stats: Dictionary = cm.moss_stats()
+	var tp: Vector2i = player.tile_position()
+	var under: int = cm.tile_at(tp.x, tp.y)
+	var under_str := "Moss" if under == WorldGen.MOSS else "Floor"
+	var paused_tag := "  (PAUSED)" if cm.paused else ""
+	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d / %d (%.1f%%)\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
+		cm.tick_count, tick_rate, paused_tag,
+		stats.moss, stats.total, 100.0 * float(stats.moss) / float(maxi(stats.total, 1)),
+		under_str, tp.x, tp.y,
+		cm.moss_probability * 100.0
+	]

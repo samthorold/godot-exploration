@@ -1,5 +1,8 @@
 # Rock density is the stored field; wall-ness is a projection
 
+> **Superseded by [ADR-0004](0004-world-is-a-graph-of-typed-agents.md).** Tile types are first-class stored values rather than projections of a density field. Continuous per-agent state survives but is now agent-local, not a global field. The text below is preserved for history.
+
+
 Each tile stores rock-density as a float, not a boolean wall flag. "Is wall" is a projection: `density > IMPASSABLE_THRESHOLD`. Visible terrain tier and (eventual) traversal cost are also projections of the same field. The boolean wall-flag inherited from the cave generator is removed.
 
 ## Why
