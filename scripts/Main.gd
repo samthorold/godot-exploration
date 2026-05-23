@@ -4,6 +4,9 @@ var cm: ChunkManager = null
 var player: Node2D = null
 var hud: CanvasLayer = null
 var readout: Label = null
+var grazers: Array[Grazer] = []
+
+const GRAZER_COUNT := 15
 
 var tick_rate: float = 2.0
 var tick_accum: float = 0.0
@@ -50,6 +53,13 @@ func _start(seed_val: int) -> void:
 	add_child(player)
 	player.position = Vector2.ZERO
 
+	grazers.clear()
+	for i in GRAZER_COUNT:
+		var g := Grazer.new()
+		g.position = Vector2(randf_range(-200, 200), randf_range(-200, 200))
+		add_child(g)
+		grazers.append(g)
+
 	hud = CanvasLayer.new()
 	readout = Label.new()
 	readout.position = Vector2(10, 10)
@@ -74,12 +84,19 @@ func _process(delta: float) -> void:
 				cm.set_tile_at(_last_player_tile.x, _last_player_tile.y, WorldGen.MOSS)
 		_last_player_tile = current_tile
 
+	for g in grazers:
+		g.steer(grazers, cm)
+		g.position += g.velocity * delta
+		g.queue_redraw()
+
 	if not cm.paused:
 		tick_accum += delta
 		var tick_interval := 1.0 / tick_rate
 		while tick_accum >= tick_interval:
 			tick_accum -= tick_interval
 			cm.world_tick(player.tile_position() as Vector2i)
+			for g in grazers:
+				g.graze(cm)
 
 	var stats: Dictionary = cm.tile_stats()
 	var tp: Vector2i = player.tile_position()
