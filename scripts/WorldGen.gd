@@ -2,7 +2,7 @@ class_name WorldGen
 extends RefCounted
 
 const CHUNK_SIZE := 30   # Tiles per chunk (each axis)
-const TILE_SIZE  := 16   # Pixels per tile
+const TILE_SIZE  := 8    # Pixels per tile
 
 const FLOOR := 0
 const MOSS  := 1

@@ -5,7 +5,7 @@ var player: Node2D = null
 var hud: CanvasLayer = null
 var readout: Label = null
 
-var tick_rate: float = 4.0
+var tick_rate: float = 2.0
 var tick_accum: float = 0.0
 var footstep_moss_chance: float = 0.15
 var _last_player_tile: Vector2i = Vector2i(0x7FFFFFFF, 0x7FFFFFFF)
