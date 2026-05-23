@@ -81,14 +81,14 @@ func _process(delta: float) -> void:
 			tick_accum -= tick_interval
 			cm.world_tick(player.tile_position() as Vector2i)
 
-	var stats: Dictionary = cm.moss_stats()
+	var stats: Dictionary = cm.tile_stats()
 	var tp: Vector2i = player.tile_position()
 	var under: int = cm.tile_at(tp.x, tp.y)
-	var under_str := "Moss" if under == WorldGen.MOSS else "Floor"
+	var under_str := "Blight" if under == WorldGen.BLIGHT else ("Moss" if under == WorldGen.MOSS else "Floor")
 	var paused_tag := "  (PAUSED)" if cm.paused else ""
-	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d / %d (%.1f%%)\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
+	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d  blight %d  / %d\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
 		cm.tick_count, tick_rate, paused_tag,
-		stats.moss, stats.total, 100.0 * float(stats.moss) / float(maxi(stats.total, 1)),
+		stats.moss, stats.blight, stats.total,
 		under_str, tp.x, tp.y,
 		cm.moss_probability * 100.0
 	]

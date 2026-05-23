@@ -24,8 +24,6 @@ func ensure_loaded(world_pos: Vector2) -> void:
 			if key not in _chunks:
 				_load(key)
 
-# B3/S23 on Moss/Floor. Player counts as +1 Moss in the 8-neighbourhood
-# of surrounding tiles. Jacobi: read current, write next, then swap.
 func world_tick(player_tile: Vector2i) -> void:
 	if paused:
 		return
@@ -40,11 +38,9 @@ func world_tick(player_tile: Vector2i) -> void:
 			for lx in cs:
 				var wx := key.x * cs + lx
 				var wy := key.y * cs + ly
-				var moss_n := _count_moss_neighbours(wx, wy, player_tile)
-				if current[ly][lx] == WorldGen.MOSS:
-					row.append(WorldGen.MOSS if moss_n >= 2 and moss_n <= 3 else WorldGen.FLOOR)
-				else:
-					row.append(WorldGen.MOSS if moss_n == 3 else WorldGen.FLOOR)
+				var counts := _count_neighbours(wx, wy, player_tile)
+				var cell: int = current[ly][lx]
+				row.append(_next_cell(cell, counts.moss, counts.blight))
 			next.append(row)
 		next_grids[key] = next
 
@@ -52,6 +48,19 @@ func world_tick(player_tile: Vector2i) -> void:
 		_chunks[key].tiles = next_grids[key]
 		_redraw_tint(key)
 	tick_count += 1
+
+func _next_cell(cell: int, moss_n: int, blight_n: int) -> int:
+	match cell:
+		WorldGen.MOSS:
+			if blight_n >= 1:
+				return WorldGen.BLIGHT
+			if moss_n >= 5 and randf() < 0.01:
+				return WorldGen.BLIGHT
+			return WorldGen.MOSS if moss_n >= 2 and moss_n <= 3 else WorldGen.FLOOR
+		WorldGen.BLIGHT:
+			return WorldGen.BLIGHT if moss_n >= 1 else WorldGen.FLOOR
+		_:
+			return WorldGen.MOSS if moss_n == 3 else WorldGen.FLOOR
 
 func set_tile_at(wx: int, wy: int, tile_type: int) -> void:
 	var cs := WorldGen.CHUNK_SIZE
@@ -72,8 +81,9 @@ func tile_at(wx: int, wy: int) -> int:
 		return WorldGen.FLOOR
 	return _chunks[key].tiles[wy - cy * cs][wx - cx * cs]
 
-func moss_stats() -> Dictionary:
+func tile_stats() -> Dictionary:
 	var moss := 0
+	var blight := 0
 	var total := 0
 	var cs := WorldGen.CHUNK_SIZE
 	for key: Vector2i in _chunks:
@@ -83,15 +93,18 @@ func moss_stats() -> Dictionary:
 				total += 1
 				if tiles[ly][lx] == WorldGen.MOSS:
 					moss += 1
-	return {moss = moss, total = total}
+				elif tiles[ly][lx] == WorldGen.BLIGHT:
+					blight += 1
+	return {moss = moss, blight = blight, total = total}
 
 # --- private ---------------------------------------------------------------
 
 func _chunk_coord(world_axis: float) -> int:
 	return floori(world_axis / float(WorldGen.CHUNK_SIZE * WorldGen.TILE_SIZE))
 
-func _count_moss_neighbours(wx: int, wy: int, player_tile: Vector2i) -> int:
-	var count := 0
+func _count_neighbours(wx: int, wy: int, player_tile: Vector2i) -> Dictionary:
+	var moss := 0
+	var blight := 0
 	var cs := WorldGen.CHUNK_SIZE
 	for dy in range(-1, 2):
 		for dx in range(-1, 2):
@@ -100,16 +113,19 @@ func _count_moss_neighbours(wx: int, wy: int, player_tile: Vector2i) -> int:
 			var nx := wx + dx
 			var ny := wy + dy
 			if nx == player_tile.x and ny == player_tile.y:
-				count += 1
+				moss += 1
 				continue
 			var cx := floori(float(nx) / float(cs))
 			var cy := floori(float(ny) / float(cs))
 			var ckey := Vector2i(cx, cy)
 			if ckey not in _chunks:
 				continue
-			if _chunks[ckey].tiles[ny - cy * cs][nx - cx * cs] == WorldGen.MOSS:
-				count += 1
-	return count
+			var tile: int = _chunks[ckey].tiles[ny - cy * cs][nx - cx * cs]
+			if tile == WorldGen.MOSS:
+				moss += 1
+			elif tile == WorldGen.BLIGHT:
+				blight += 1
+	return {moss = moss, blight = blight}
 
 func _load(key: Vector2i) -> void:
 	var tiles := WorldGen.generate_chunk(key.x, key.y, master_seed, moss_probability)
@@ -145,9 +161,13 @@ func _fill_tint_image(img: Image, tiles: Array) -> void:
 			img.set_pixel(lx, ly, _tile_color(tiles[ly][lx]))
 
 func _tile_color(tile_type: int) -> Color:
-	if tile_type == WorldGen.MOSS:
-		return Color(0.25, 0.55, 0.20)
-	return Color(0.15, 0.12, 0.10)
+	match tile_type:
+		WorldGen.MOSS:
+			return Color(0.25, 0.55, 0.20)
+		WorldGen.BLIGHT:
+			return Color(0.65, 0.20, 0.12)
+		_:
+			return Color(0.15, 0.12, 0.10)
 
 func _redraw_tint(key: Vector2i) -> void:
 	var chunk: Dictionary = _chunks[key]

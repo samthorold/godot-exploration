@@ -4,8 +4,9 @@ extends RefCounted
 const CHUNK_SIZE := 30   # Tiles per chunk (each axis)
 const TILE_SIZE  := 8    # Pixels per tile
 
-const FLOOR := 0
-const MOSS  := 1
+const FLOOR  := 0
+const MOSS   := 1
+const BLIGHT := 2
 
 static func generate_chunk(chunk_x: int, chunk_y: int, seed: int, moss_probability: float) -> Array:
 	var grid := []
