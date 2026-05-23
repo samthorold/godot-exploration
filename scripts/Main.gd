@@ -97,15 +97,33 @@ func _process(delta: float) -> void:
 			cm.world_tick(player.tile_position() as Vector2i)
 			for g in grazers:
 				g.graze(cm)
+				g.tick_life(1.0)
+
+			var births: Array[Grazer] = []
+			for i in grazers.size():
+				for j in range(i + 1, grazers.size()):
+					var child := grazers[i].try_reproduce_with(grazers[j])
+					if child != null:
+						births.append(child)
+			for child in births:
+				add_child(child)
+				grazers.append(child)
+
+			var i := grazers.size() - 1
+			while i >= 0:
+				if grazers[i].is_starved():
+					grazers[i].queue_free()
+					grazers.remove_at(i)
+				i -= 1
 
 	var stats: Dictionary = cm.tile_stats()
 	var tp: Vector2i = player.tile_position()
 	var under: int = cm.tile_at(tp.x, tp.y)
 	var under_str := "Blight" if under == WorldGen.BLIGHT else ("Moss" if under == WorldGen.MOSS else "Floor")
 	var paused_tag := "  (PAUSED)" if cm.paused else ""
-	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d  blight %d  / %d\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
+	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d  blight %d  / %d  grazers %d\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
 		cm.tick_count, tick_rate, paused_tag,
-		stats.moss, stats.blight, stats.total,
+		stats.moss, stats.blight, stats.total, grazers.size(),
 		under_str, tp.x, tp.y,
 		cm.moss_probability * 100.0
 	]
