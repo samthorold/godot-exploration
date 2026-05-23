@@ -5,6 +5,11 @@ const HALF_SIZE := 6.0  # Collision half-extent; slightly under TILE_SIZE/2
 
 var chunk_manager: ChunkManager = null
 
+# The player as a mobile field-cell (CONTEXT.md / Mobile field-cell).
+# capacity > 1 — structural encoding of the player as a stabiliser/perturber.
+var vitality: float = 0.5
+var capacity: float = 5.0
+
 func _ready() -> void:
 	var cam := Camera2D.new()
 	cam.enabled = true
@@ -38,6 +43,10 @@ func _process(delta: float) -> void:
 		if _can_occupy(v, ts):
 			position = v
 
+	# One evolve tick per frame, after position is settled.
+	chunk_manager.evolve(delta, [self])
+	queue_redraw()
+
 func _can_occupy(pos: Vector2, ts: float) -> bool:
 	for dy in [-HALF_SIZE, HALF_SIZE]:
 		for dx in [-HALF_SIZE, HALF_SIZE]:
@@ -47,5 +56,8 @@ func _can_occupy(pos: Vector2, ts: float) -> bool:
 	return true
 
 func _draw() -> void:
-	draw_rect(Rect2(-HALF_SIZE, -HALF_SIZE, HALF_SIZE * 2.0, HALF_SIZE * 2.0), Color(0.95, 0.65, 0.15))
-	draw_circle(Vector2.ZERO, 2.0, Color(1.0, 0.9, 0.5))
+	var dead  := Color(0.40, 0.34, 0.24)
+	var vital := Color(1.00, 0.70, 0.20)
+	var body  := dead.lerp(vital, vitality)
+	draw_rect(Rect2(-HALF_SIZE, -HALF_SIZE, HALF_SIZE * 2.0, HALF_SIZE * 2.0), body)
+	draw_circle(Vector2.ZERO, 2.0, Color(1.0, 0.95, 0.70))

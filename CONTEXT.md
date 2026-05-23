@@ -20,6 +20,8 @@ Autonomous change in the world over time, driven by cellular-automata-style rule
 - **Loaded chunks** (inside view radius) tick in real time, so the player can observe evolution as it happens.
 - **Unloaded chunks** replay-on-reload, advancing by the elapsed Δt in a single call. This is purely an optimization; the result is the same as if the chunk had been ticking all along.
 
+The two-cadence machinery (state retention for unloaded chunks, presence_history recording, replay-on-reload) is not yet implemented; today's prototype keeps all relevant chunks loaded for the duration of a session, so the question doesn't arise.
+
 The function is pure modulo `presence_history`, which records where the player has been so [[presence-influence]] can be replayed for unloaded chunks.
 
 ### Traversal cost
@@ -30,19 +32,34 @@ Terrain is not binary passable/blocked. Tiles carry a movement cost on a spectru
 The world is modelled as a small stack of scalar fields per tile, evolving under [[evolution]]. Visible terrain is a *projection* of the current field values, not a stored type. Adding a new field (moisture, heat, etc.) is the canonical way to extend the world model.
 
 ### Rock density
-The original field, inherited from the cave generator. Determines structural terrain — wall, cracked wall, rubble, floor — and the substrate other fields run on top of.
+The original field, inherited from the cave generator. Stored per-tile as a continuous float in [0, 1]; structural terrain (wall, cracked wall, rubble, floor) and traversal cost are *projections* of this field, not separately-stored types (ADR-0003). The substrate other fields run on top of.
 
 ### Vitality
 A scalar measure of "how alive" a tile is. Driven by *coupled growth-and-decay rules whose rates are functions of the local field stack* — chiefly [[rock-density]] today, other fields later. Both rules run continuously; neither wins permanently. The result is visibly churning patterns (Game-of-Life-like) that nonetheless *mean something* about the substrate (ecology-like): the player can read regions by their vitality character. Chosen as the second field specifically because it remains dynamic *with no player input* — its visible motion is the proof that the world is alive.
 
+### Dynamics stability
+The design constraint that the vitality field must land between two failure modes: *mush* (diffusion dominates, all character smooths into uniform value) and *butterfly* (sensitivity dominates, a single perturbation cascades across the world). The eventual growth/decay rules and the distributed perturbations from [[agents]] are what hold the middle; without either, the field tends toward mush. Finding the middle is a feel question, not an analytic one — the prototype is the means.
+
+### Local mixing
+A pass within [[evolution]], not a parallel mechanism. The single local rule by which two cells of a field exchange value: symmetric, conservative, diffusion-shaped, *mass-weighted by [[field-capacity]]*. Runs inside `evolve` over an adjacency graph that includes both tile↔tile edges and [[mobile-field-cell]]↔underfoot tile edges — the player is just a (high-capacity) node in that graph. There is no separate "coupling" rule; coupling is the same pass applied to the same graph. The conserved quantity across any coupled pair is `m·v`, not `v` alone — bigger reservoirs barely move per exchange, smaller ones equilibrate fast.
+
+### Field capacity
+A per-cell scalar `m` setting how much each cell resists changing its field value during [[local-mixing]]. Tile cells have `m = 1`. [[Mobile-field-cell]]s have `m > 1`. The operator equilibrates pairs at the mass-weighted mean `(m_a·v_a + m_b·v_b) / (m_a + m_b)`, so a high-capacity cell pulls neighbours toward itself while barely shifting. This is the structural encoding of the player (and future agents) acting as a stabiliser of chaotic regions and a perturber of harmonious ones: in a uniform region a high-capacity differently-valued node creates gradient (introduces dynamics); in a fluctuating region the same node low-pass-filters local variation (dampens). No special-case code — just a per-cell property the operator already consumes.
+
 ### Presence
-The player's only verb. The player has no toolkit, no inventory, no action button — *being-here-now* is the entire vocabulary. Where you are, how long you stay, what path you trace, what you stand on, what you stand near — these are the game's expressive surface. All other "mechanics" are consequences of presence, not separate verbs.
+The player's only verb. The player has no toolkit, no inventory, no action button — *being-here-now* is the entire vocabulary. Where you are, how long you stay, what path you trace, what you stand on, what you stand near, *what you look at* — these are the game's expressive surface. All other "mechanics" are consequences of presence, not separate verbs. Presence has at least two modes — [[presence-coupling]] (the foot) and [[gaze-presence]] (the eye) — both realised as edges in the same [[local-mixing]] graph.
 
 ### Presence coupling
-Presence is *bidirectional*. The player is itself a small mobile field-stack (see [[fields]]) and when standing on a tile, the player's fields and the tile's fields exchange. The player gives and takes simultaneously, by the same mechanism, in opposite directions where gradients differ. Replaces the earlier (one-way) "presence influence" framing: the player is not a perturbation *imposed on* the world but a *part of* it, coupled by the same field rules.
+The strong, single-tile presence edge: ([[mobile-field-cell]], underfoot tile) in the [[local-mixing]] adjacency graph. Bidirectional and conservative by construction, because the operator is. Not a distinct rule or a separate call — it is the same diffusion pass already running over tile↔tile edges, with mobile cells included as nodes wherever they currently are. "What you stand near" emerges from neighbouring tile↔tile edges in the same pass; there is no separate "footprint" mechanism. The eye's contribution is captured separately as [[gaze-presence]].
+
+### Gaze presence
+The weak, distributed presence edges: every tile in the [[mobile-field-cell]]'s field of view is connected to the cell by an additional edge in the [[local-mixing]] graph, at lower coupling strength than the footprint edge (smaller effective κ, larger capacity-asymmetry, or both). Observation thus changes the observed — and the observed shapes the observer back — by the same operator, slowly. No new mechanism, no new pass: just additional edges of the existing graph. The same field-of-view computation that drives perception ([[memory]] / [[truth]]) drives coupling — visibility *is* a form of presence.
+
+### Mobile field-cell
+A field-stack with a position that moves through the world. The [[player-field-stack]] is the first instance; future [[agents]] will be others. A mobile cell couples to whichever tile it currently occupies via [[local-mixing]] — the same operator that mixes tile↔tile — so the player is never a special case in the field code. Mobile cells have [[field-capacity]] > 1 (tiles default to 1), which is how their stabilising/perturbing effect on the field is encoded structurally rather than via special-case behaviour.
 
 ### Player field-stack
-The player carries their own field values — at minimum [[vitality]]. These evolve via [[presence-coupling]] with the tile underfoot and (likely) their own internal decay/growth rules, mirroring how tiles evolve. The player is therefore *non-static*: they become what they've been near, and what they've been near becomes them. Symmetry with the world is the point.
+The player's instance of a [[mobile-field-cell]]. Carries at minimum [[vitality]]. Evolves via [[presence-coupling]] with the tile underfoot and (eventually) its own internal decay/growth rules, mirroring how tiles evolve. The player is therefore *non-static*: they become what they've been near, and what they've been near becomes them. Symmetry with the world (and with future agents) is the point.
 
 ## What is deliberately deferred
 
@@ -50,7 +67,7 @@ The player carries their own field values — at minimum [[vitality]]. These evo
 The player's [[player-field-stack]] can be depleted in principle, but no mechanic currently ends the game when it is. Stakes are deliberately deferred: until [[presence-coupling]] is built and *felt*, we don't know what depletion should mean or how fast it should happen. The intended future shape is field-driven stakes (player fades when their internal fields drop below a threshold), introduced once the core coupling dynamic has been lived with.
 
 ### Agents (deferred)
-The "C layer" — other entities moving across chunks with their own goals — is deferred. Today the world is terrain + fields + player. Once agents exist, [[evolution]]'s two-cadence simplification weakens (agents may have moved across unloaded chunks) and a coarser off-screen simulation will be needed.
+The "C layer" — other entities moving across chunks with their own goals — is deferred. Today the world is terrain + fields + player. When agents arrive, they will be [[mobile-field-cell]]s using the same [[local-mixing]] rule as the player; no field-code change is required to add them. Beyond gameplay variety, agents play a [[dynamics-stability]] role: distributed non-player perturbations help hold the vitality landscape against diffusion's homogenising tendency, in concert with the eventual growth/decay rules. What is deferred is their *behaviour layer* (goals, pathfinding) and the off-screen simulation needed because they may move across unloaded chunks — [[evolution]]'s two-cadence simplification weakens at that point and a coarser approximation will be needed.
 
 ## Knowledge
 
