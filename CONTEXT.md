@@ -9,8 +9,11 @@ The world evolves over time, including in regions the player has already explore
 
 This is the *reason to explore*: not to find static treasure, but to witness and re-witness a place that won't sit still.
 
-### Discovery (design register)
-The primary emotional pull. The player explores because there is *stuff out there* — distinctive places, landmarks, things worth walking to. Sits on top of [[living-world]]: what's out there is also changing.
+### Trespass cycle
+The recurring arc a player passes through with each new phenomenon: **panic → mastery → overreach → collapse → symbiosis**. The player arrives as an outsider, misreads the system as hostile, learns to manipulate it, breaks it by pushing too hard, and finally learns to move within it. Each new encounter restarts the cycle at smaller scale. The game teaches by seduction and consequence, not instruction. Exploration is what happens between collapse and symbiosis — the player moves again, but differently.
+
+### Symbiosis
+The end-state of a [[trespass-cycle]]. The player becomes useful to the ecosystem and the ecosystem becomes useful to the player. Not submission (passive), not mastery (extractive) — mutual benefit, earned through failure. The Sam trap: a player clever enough to reach mastery but too proud to let the system teach them through collapse never arrives at symbiosis. They keep extracting until the system rejects them.
 
 ## World dynamics
 
@@ -72,6 +75,29 @@ Not yet implemented; today's prototype builds only [[presence-coupling]]. Gaze p
 
 ### Player agent
 The player's instance of a [[mobile-agent]]. The single instance of the Player type. Its rule reads the underfoot tile-agent (and eventually gaze-neighbour tile-agents) and produces the player's next state. Future internal dynamics (decay, growth) will be expressed in that rule. The player is therefore *non-static*: they become what they've been near, and what they've been near becomes them. Symmetry with the world (and with future agents) is the point.
+
+## Diversity
+
+### Emergent diversity
+The diversity of life in the world is not hand-authored. Species, symbiotic relationships, and ecological roles emerge from the simulation. No two worlds share the same bestiary. The world is deeper than any player can fully catalogue — this is the source of the [[trespass-cycle]]'s endlessness. The only way to understand is to observe.
+
+### Species
+A cluster of [[mobile-agent]]s with similar [[strategy vector]]s, drifted apart from other clusters through reproductive isolation and selection pressure. No species is declared — speciation emerges when populations diverge. A species is a pattern the player recognises, not a category the simulation enforces.
+
+### Strategy vector
+The heritable trait of a [[mobile-agent]]: a set of numerical weights governing what to approach, what to flee, what to eat, speed, size, reproduction threshold, and similar parameters. All agents share the same reward (survive, reproduce) and the same rule function — strategy vectors determine *how*. Offspring inherit their parent's vector with small mutations. Selection pressure shapes populations over generations. The strategy vector *is* perception — no separate sensor model exists. Weights encode the compressed evolutionary memory of what mattered to a lineage's ancestors.
+
+### Size
+A strategy-vector trait that determines an agent's trophic position. Agents can only consume other agents smaller than themselves, at an energy cost proportional to the prey's size. Larger prey costs more energy and has a lower success rate. Being large costs more energy to maintain. This prevents runaway gigantism and creates natural trophic levels without declaring them.
+
+### Warmup
+The world simulates for many generations before the player arrives, producing a mature ecosystem with established [[species]], stable food webs, and deep evolutionary history. The player crash-lands into a world that was ancient and whole without them.
+
+### Producer
+An agent type that generates energy from nothing — the base of the food web. Moss is the first producer. Producers spread aggressively by default; their regulation comes from the food web (being eaten) and terrain constraints, not from cellular-automata population rules. Remove the consumers, producers take over. Remove the producers, everything above them collapses.
+
+### Ecological roles
+Structural roles that keep the world dynamically stable: producers, consumers, decomposers, engineers (organisms that reshape terrain). Roles are not prescribed per species — they emerge from the [[strategy vector]] a lineage happens to have. A species that eats moss and excretes floor is a grazer and a decomposer simultaneously.
 
 ## What is deliberately deferred
 
