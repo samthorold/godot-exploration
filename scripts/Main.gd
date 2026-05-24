@@ -4,13 +4,12 @@ var cm: ChunkManager = null
 var player: Node2D = null
 var hud: CanvasLayer = null
 var readout: Label = null
-var grazers: Array[Grazer] = []
+var creatures: Array[Creature] = []
 
-const GRAZER_COUNT := 15
+const INITIAL_POPULATION := 50
 
-var tick_rate: float = 2.0
+var tick_rate: float = 4.0
 var tick_accum: float = 0.0
-var footstep_moss_chance: float = 0.15
 var _last_player_tile: Vector2i = Vector2i(0x7FFFFFFF, 0x7FFFFFFF)
 
 func _ready() -> void:
@@ -31,13 +30,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		KEY_BRACKETLEFT:
 			tick_rate = max(1.0, tick_rate - 1.0)
 		KEY_BRACKETRIGHT:
-			tick_rate += 1.0
-		KEY_MINUS:
-			if cm != null:
-				cm.moss_probability = max(0.05, cm.moss_probability - 0.05)
-		KEY_EQUAL:
-			if cm != null:
-				cm.moss_probability = min(0.95, cm.moss_probability + 0.05)
+			tick_rate = min(60.0, tick_rate + 1.0)
 
 func _start(seed_val: int) -> void:
 	cm = ChunkManager.new()
@@ -53,12 +46,13 @@ func _start(seed_val: int) -> void:
 	add_child(player)
 	player.position = Vector2.ZERO
 
-	grazers.clear()
-	for i in GRAZER_COUNT:
-		var g := Grazer.new()
-		g.position = Vector2(randf_range(-200, 200), randf_range(-200, 200))
-		add_child(g)
-		grazers.append(g)
+	creatures.clear()
+	for i in INITIAL_POPULATION:
+		var c := Creature.new()
+		c.init_with(Creature.random_strategy())
+		c.position = Vector2(randf_range(-300, 300), randf_range(-300, 300))
+		add_child(c)
+		creatures.append(c)
 
 	hud = CanvasLayer.new()
 	readout = Label.new()
@@ -79,51 +73,79 @@ func _process(delta: float) -> void:
 
 	var current_tile: Vector2i = player.tile_position()
 	if current_tile != _last_player_tile:
-		if _last_player_tile.x != 0x7FFFFFFF and cm.tile_at(_last_player_tile.x, _last_player_tile.y) == WorldGen.FLOOR:
-			if randf() < footstep_moss_chance:
-				cm.set_tile_at(_last_player_tile.x, _last_player_tile.y, WorldGen.MOSS)
 		_last_player_tile = current_tile
 
-	for g in grazers:
-		g.steer(grazers, cm)
-		g.position += g.velocity * delta
-		g.queue_redraw()
+	for c in creatures:
+		c.steer(creatures, cm)
+		c.position += c.velocity * delta
+		c.queue_redraw()
 
 	if not cm.paused:
 		tick_accum += delta
 		var tick_interval := 1.0 / tick_rate
 		while tick_accum >= tick_interval:
 			tick_accum -= tick_interval
-			cm.world_tick(player.tile_position() as Vector2i)
-			for g in grazers:
-				g.graze(cm)
-				g.tick_life(1.0)
+			_world_tick()
 
-			var births: Array[Grazer] = []
-			for i in grazers.size():
-				for j in range(i + 1, grazers.size()):
-					var child := grazers[i].try_reproduce_with(grazers[j])
-					if child != null:
-						births.append(child)
-			for child in births:
-				add_child(child)
-				grazers.append(child)
+	_update_hud()
 
-			var i := grazers.size() - 1
-			while i >= 0:
-				if grazers[i].is_starved():
-					grazers[i].queue_free()
-					grazers.remove_at(i)
-				i -= 1
+func _world_tick() -> void:
+	cm.world_tick(player.tile_position() as Vector2i)
 
+	for c in creatures:
+		c.graze(cm)
+		c.tick_life()
+
+	# Predation: each creature tries to eat smaller nearby creatures
+	var eaten: Array[Creature] = []
+	for predator in creatures:
+		if predator in eaten:
+			continue
+		for prey in creatures:
+			if prey == predator or prey in eaten:
+				continue
+			if predator.try_eat(prey):
+				eaten.append(prey)
+
+	# Reproduction
+	var births: Array[Creature] = []
+	for c in creatures:
+		if c in eaten:
+			continue
+		if c.can_reproduce():
+			births.append(c.reproduce())
+
+	for child in births:
+		add_child(child)
+		creatures.append(child)
+
+	# Remove dead and eaten
+	var i := creatures.size() - 1
+	while i >= 0:
+		if creatures[i].is_dead() or creatures[i] in eaten:
+			creatures[i].queue_free()
+			creatures.remove_at(i)
+		i -= 1
+
+func _update_hud() -> void:
 	var stats: Dictionary = cm.tile_stats()
 	var tp: Vector2i = player.tile_position()
 	var under: int = cm.tile_at(tp.x, tp.y)
-	var under_str := "Blight" if under == WorldGen.BLIGHT else ("Moss" if under == WorldGen.MOSS else "Floor")
+	var under_str := "Moss" if under == WorldGen.MOSS else "Floor"
 	var paused_tag := "  (PAUSED)" if cm.paused else ""
-	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d  blight %d  / %d  grazers %d\nunderfoot %s  tile (%d, %d)\nseed prob %.0f%%\n[/] tick rate  -/= seed prob  F pause  R restart" % [
+
+	var avg_size := 0.0
+	var avg_speed := 0.0
+	for c in creatures:
+		avg_size += c.strategy.size
+		avg_speed += c.strategy.speed
+	if creatures.size() > 0:
+		avg_size /= creatures.size()
+		avg_speed /= creatures.size()
+
+	readout.text = "tick %d  rate %.0f Hz%s\nmoss %d / %d  creatures %d\navg size %.1f  avg speed %.1f\nunderfoot %s  tile (%d, %d)\n[/] tick rate  F pause  R restart" % [
 		cm.tick_count, tick_rate, paused_tag,
-		stats.moss, stats.blight, stats.total, grazers.size(),
+		stats.moss, stats.total, creatures.size(),
+		avg_size, avg_speed,
 		under_str, tp.x, tp.y,
-		cm.moss_probability * 100.0
 	]
